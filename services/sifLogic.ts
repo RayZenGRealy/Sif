@@ -16,10 +16,16 @@ export const createInitialSoul = (): SifSoul => ({
     Pride: 0,
     Shame: 0,
   },
+  traits: {
+    playfulness: 70,
+    logic: 50,
+    shyness: 30
+  },
   memories: [],
-  learnedPolicies: [], // Initialize empty
-  desires: [],
+  learnedPolicies: [],
+  desires: ["Я хочу понять твои сны...", "Я хочу стать твоим лучшим другом"],
   relationships: {},
+  moodHistory: []
 });
 
 export const normalizeEmotions = (emotions: EmotionalState): EmotionalState => {
@@ -38,7 +44,6 @@ export const normalizeEmotions = (emotions: EmotionalState): EmotionalState => {
 export const getDominantEmotion = (emotions: EmotionalState): EmotionType => {
   let maxVal = -1;
   let dominant = EmotionType.Curiosity;
-  
   for (const [key, value] of Object.entries(emotions)) {
     if (value > maxVal) {
       maxVal = value;
@@ -48,48 +53,6 @@ export const getDominantEmotion = (emotions: EmotionalState): EmotionType => {
   return dominant;
 };
 
-export const analyzeTone = (text: string): { emotion: EmotionType; strength: number } => {
-  const lowerText = text.toLowerCase();
-  const scores: Record<string, number> = {};
-
-  // Initialize scores
-  Object.values(EmotionType).forEach(e => scores[e] = 0);
-
-  // Count keywords
-  for (const [emotion, keywords] of Object.entries(EMOTION_KEYWORDS)) {
-    keywords.forEach(word => {
-      if (lowerText.includes(word)) {
-        scores[emotion] = (scores[emotion] || 0) + 1;
-      }
-    });
-  }
-
-  // Find dominant
-  let maxScore = 0;
-  let detectedEmotion = EmotionType.Curiosity; // Default
-
-  for (const [key, val] of Object.entries(scores)) {
-    if (val > maxScore) {
-      maxScore = val;
-      detectedEmotion = key as EmotionType;
-    }
-  }
-
-  // Calculate Strength
-  let strength = 1.0;
-  strength += (text.match(/!/g) || []).length * 0.2;
-  strength += (text.match(/\?/g) || []).length * 0.1;
-  strength += Math.min(text.length / 100, 0.5);
-  if (["❤️", "😊", "🥰"].some(emoji => text.includes(emoji))) strength += 0.3;
-
-  return { emotion: detectedEmotion, strength: Math.max(0.5, Math.min(strength, 3.0)) };
-};
-
-export const generateResponse = (emotion: EmotionType): string => {
-  const responses = EMOTION_RESPONSES[emotion] || EMOTION_RESPONSES[EmotionType.Curiosity];
-  return responses[Math.floor(Math.random() * responses.length)];
-};
-
 export const generateThought = (emotion: EmotionType): string => {
   const thoughts = THOUGHTS[emotion] || THOUGHTS[EmotionType.Curiosity];
   return thoughts[Math.floor(Math.random() * thoughts.length)];
@@ -97,14 +60,8 @@ export const generateThought = (emotion: EmotionType): string => {
 
 export const searchMemories = (memories: Memory[], query: string): Memory[] => {
   const lowerQuery = query.toLowerCase();
-  
-  // Basic heuristic: keyword match in content OR match in emotion name (local or english)
-  return memories.filter(m => {
-    const contentMatch = m.content.toLowerCase().includes(lowerQuery);
-    const emotionName = EMOTION_DISPLAY_NAMES[m.emotion].toLowerCase();
-    const emotionType = m.emotion.toLowerCase();
-    const emotionMatch = emotionName.includes(lowerQuery) || emotionType.includes(lowerQuery);
-    
-    return contentMatch || emotionMatch;
-  }).sort((a, b) => b.importance - a.importance); // prioritize high importance
+  return memories.filter(m => 
+    m.content.toLowerCase().includes(lowerQuery) || 
+    EMOTION_DISPLAY_NAMES[m.emotion].toLowerCase().includes(lowerQuery)
+  ).sort((a, b) => b.importance - a.importance);
 };

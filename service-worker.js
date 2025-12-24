@@ -1,17 +1,33 @@
 
-const CACHE_NAME = 'sif-cache-v1';
-const RAIN_SOUNDS = '/rain.mp3'; // Example of asset
+const CACHE_NAME = 'sif-cache-v3';
+// Use relative paths to ensure it works in subdirectories or preview environments
+const URLS_TO_CACHE = [
+  './',
+  './index.html',
+  './manifest.json',
+  'https://cdn.tailwindcss.com',
+  'https://esm.sh/recharts@^3.6.0',
+  'https://esm.sh/lucide-react@^0.562.0',
+  'https://esm.sh/react@^19.2.3/',
+  'https://esm.sh/react@^19.2.3',
+  'https://esm.sh/react-dom@^19.2.3/',
+  'https://esm.sh/@google/genai@^1.34.0'
+];
 
 // Install event - Cache core assets
 self.addEventListener('install', (event) => {
   self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll([
-        '/',
-        '/index.html',
-        '/manifest.json',
-      ]);
+      // We use map to add files individually so one failure (like an external CDN timeout) 
+      // doesn't break the entire app installation.
+      return Promise.all(
+        URLS_TO_CACHE.map(url => {
+          return cache.add(url).catch(err => {
+            console.warn(`Failed to cache ${url}:`, err);
+          });
+        })
+      );
     })
   );
 });
@@ -32,17 +48,32 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Fetch event - Serve from cache, fall back to network
+// Fetch event - Stale-while-revalidate strategy
 self.addEventListener('fetch', (event) => {
-  // For PWA installation criteria, we just need a fetch handler.
-  // We prioritize network for API calls and dynamic imports (esm.sh)
-  
+  // Only handle GET requests
   if (event.request.method !== 'GET') return;
+  
+  // Skip cross-origin chrome-extension requests or similar if any
+  if (!event.request.url.startsWith('http')) return;
 
   event.respondWith(
-    fetch(event.request)
-      .catch(() => {
-        return caches.match(event.request);
-      })
+    caches.match(event.request).then((cachedResponse) => {
+      const fetchPromise = fetch(event.request).then((networkResponse) => {
+        // Cache the new response if valid
+        if (networkResponse && networkResponse.status === 200) {
+            const responseToCache = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+                cache.put(event.request, responseToCache);
+            });
+        }
+        return networkResponse;
+      }).catch(err => {
+         // Network failed, nothing to do
+         // console.log('Network request failed', err);
+      });
+
+      // Return cached response immediately if available, otherwise wait for network
+      return cachedResponse || fetchPromise;
+    })
   );
 });

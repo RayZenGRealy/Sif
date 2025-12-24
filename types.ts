@@ -1,5 +1,4 @@
 
-
 export enum EmotionType {
   Joy = 'Joy',
   Sadness = 'Sadness',
@@ -23,23 +22,38 @@ export interface EmotionalState {
   Shame: number;
 }
 
+export interface PersonalityTraits {
+  playfulness: number; // 0-100
+  logic: number;      // 0-100
+  shyness: number;    // 0-100
+}
+
 export interface Memory {
   id: string;
   content: string;
   timestamp: Date;
   emotion: EmotionType;
   importance: number;
+  recalledCount?: number;
+}
+
+export interface MoodSnapshot {
+  timestamp: number;
+  emotion: EmotionType;
+  intensity: number;
 }
 
 export interface SifSoul {
   name: string;
-  age: number; // Days
+  age: number; 
   lifeEnergy: number;
   currentEmotion: EmotionalState;
+  traits: PersonalityTraits;
   memories: Memory[];
-  learnedPolicies: string[]; // Explicit rules learned from user feedback
+  learnedPolicies: string[]; 
   desires: string[];
   relationships: Record<string, number>;
+  moodHistory: MoodSnapshot[];
 }
 
 export interface Source {
@@ -54,7 +68,8 @@ export interface ChatMessage {
   emotion?: EmotionType;
   timestamp: Date;
   sources?: Source[];
-  audioBase64?: string; // Raw PCM data base64 encoded
-  image?: string; // Base64 encoded image for display
-  videoUrl?: string; // URL for Veo generated video
+  audioBase64?: string;
+  image?: string;
+  videoUrl?: string;
+  memoryRecall?: string; // Content of memory used for this message
 }

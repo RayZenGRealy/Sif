@@ -7,11 +7,16 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="SIF" />
-    <link rel="manifest" href="/manifest.json" />
+    <link rel="manifest" href="./manifest.json" />
     
     <title>SIF System</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
+      // Polyfill for process.env
+      if (typeof process === 'undefined') {
+        window.process = { env: { API_KEY: '' } };
+      }
+      
       tailwind.config = {
         theme: {
           extend: {
@@ -19,29 +24,14 @@
               sif: {
                 bg: '#0f172a',
                 panel: '#1e293b',
-                joy: '#fbbf24', // Amber
-                sadness: '#3b82f6', // Blue
-                anger: '#ef4444', // Red
-                fear: '#a855f7', // Purple
-                curiosity: '#22c55e', // Green
-                affection: '#ec4899', // Pink
-                pride: '#f97316', // Orange
-                shame: '#64748b', // Slate
-              }
-            },
-            animation: {
-              'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-              'float': 'float 3s ease-in-out infinite',
-              'glow': 'glow 2s ease-in-out infinite alternate',
-            },
-            keyframes: {
-              float: {
-                '0%, 100%': { transform: 'translateY(0)' },
-                '50%': { transform: 'translateY(-10px)' },
-              },
-              glow: {
-                'from': { boxShadow: '0 0 10px currentColor' },
-                'to': { boxShadow: '0 0 20px currentColor, 0 0 10px currentColor' },
+                joy: '#fbbf24',
+                sadness: '#3b82f6',
+                anger: '#ef4444',
+                fear: '#a855f7',
+                curiosity: '#22c55e',
+                affection: '#ec4899',
+                pride: '#f97316',
+                shame: '#64748b',
               }
             }
           }
@@ -52,34 +42,16 @@
       body {
         background-color: #0f172a;
         color: #e2e8f0;
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
         overflow: hidden;
-        overscroll-behavior: none; /* Prevent pull-to-refresh on mobile */
-        -webkit-tap-highlight-color: transparent; /* Remove blue highlight on tap */
-        touch-action: manipulation;
+        overscroll-behavior: none;
+        -webkit-tap-highlight-color: transparent;
       }
-      /* Prevent text selection to feel more like an app */
-      * {
-        -webkit-user-select: none;
-        user-select: none;
-      }
-      /* Re-enable text selection for inputs and chat messages */
-      input, textarea, [contenteditable=true], .whitespace-pre-wrap {
-        -webkit-user-select: text;
-        user-select: text;
-      }
-      
-      /* Custom scrollbar for panels */
-      ::-webkit-scrollbar {
-        width: 4px; /* Thinner scrollbar for mobile */
-      }
-      ::-webkit-scrollbar-track {
-        background: transparent; 
-      }
-      ::-webkit-scrollbar-thumb {
-        background: #475569; 
-        border-radius: 4px;
-      }
+      * { -webkit-user-select: none; user-select: none; }
+      input, textarea, .selectable { -webkit-user-select: text; user-select: text; }
+      ::-webkit-scrollbar { width: 4px; }
+      ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+      .glass { background: rgba(30, 41, 59, 0.5); backdrop-filter: blur(8px); border: 1px solid rgba(255, 255, 255, 0.1); }
     </style>
   <script type="importmap">
 {
@@ -97,11 +69,23 @@
   <body>
     <div id="root"></div>
     <script>
+      // Robust SW registration
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/service-worker.js')
-            .then(reg => console.log('SW registered'))
-            .catch(err => console.log('SW registration failed', err));
+          const swUrl = './service-worker.js';
+          // Check if origin matches to avoid the scriptURL origin error
+          try {
+            const swAbsoluteUrl = new URL(swUrl, window.location.href).href;
+            if (new URL(swAbsoluteUrl).origin === window.location.origin) {
+              navigator.serviceWorker.register(swUrl)
+                .then(reg => console.log('SW registered'))
+                .catch(err => console.warn('SW registration failed (non-critical):', err));
+            } else {
+              console.warn('SW skipped: Origin mismatch in preview environment.');
+            }
+          } catch (e) {
+            console.error('SW init error:', e);
+          }
         });
       }
     </script>
