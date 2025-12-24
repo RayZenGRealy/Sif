@@ -1,0 +1,21 @@
+{
+  "short_name": "SIF",
+  "name": "SIF Soul Interface",
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#0f172a",
+  "background_color": "#0f172a",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "https://esm.sh/lucide-static@0.400.0/icons/brain-circuit.svg",
+      "type": "image/svg+xml",
+      "sizes": "192x192"
+    },
+    {
+      "src": "https://esm.sh/lucide-static@0.400.0/icons/brain-circuit.svg",
+      "type": "image/svg+xml",
+      "sizes": "512x512"
+    }
+  ]
+}

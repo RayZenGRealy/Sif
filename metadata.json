@@ -1,0 +1,8 @@
+{
+  "name": "SIF System",
+  "description": "A web-based implementation of the Soul Interface System (SIF), featuring a simulated emotional core, memory retention, and dynamic interaction logic.",
+  "requestFramePermissions": [
+    "microphone",
+    "camera"
+  ]
+}
