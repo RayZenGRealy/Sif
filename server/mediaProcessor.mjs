@@ -17,8 +17,11 @@ export function isSupportedMedia(name, mimeType = '') {
 }
 
 function isVideo(name, mimeType = '') {
+  const type = String(mimeType);
+  if (type.startsWith('audio/')) return false;
+  if (type.startsWith('video/')) return true;
   const ext = extensionOf(name);
-  return String(mimeType).startsWith('video/') || ['mp4','mov','mkv','avi','m4v','webm'].includes(ext);
+  return ['mp4','mov','mkv','avi','m4v','webm'].includes(ext);
 }
 
 function decodeBase64(base64) {
@@ -165,7 +168,7 @@ async function extractVideoFrames(inputPath, frameDir, ffmpegPath, intervalSecon
     '-loglevel', 'error',
     '-y',
     '-i', inputPath,
-    '-vf', 'fps=1/' + intervalSeconds + ',scale=960:-2',
+    '-vf', 'fps=1/' + intervalSeconds + ',scale=960:-2:force_original_aspect_ratio=decrease',
     '-frames:v', String(maxFrames),
     '-q:v', '3',
     outputPattern,
