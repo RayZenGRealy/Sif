@@ -14,7 +14,7 @@ SIF is evolving from a single-provider AI Studio app into a modular AI core with
 5. Start SIF:
    `npm run dev`
 
-`npm run dev` starts both the SIF Gateway on port 8787 and Vite on port 3000. Vite proxies `/api/*` to the gateway.
+`npm run dev` starts the SIF Gateway on port 8787, the local Knowledge Service on port 8788, and Vite on port 3000. Vite proxies `/api/*` and `/knowledge-api/*` to the local services.
 
 ### Example local model configuration
 
@@ -57,3 +57,18 @@ SIF_TTS_MODEL=kokoro
 `SIF_LOCAL_MODEL` можно оставить пустым: gateway попробует найти модели автоматически через `/v1/models` или Ollama `/api/tags`.
 
 В `SIF_OFFLINE_ONLY=true` Gemini отключается даже при наличии ключа. Для голоса необходимо отдельно запустить локальные STT/TTS сервисы с OpenAI-compatible endpoints.
+
+## Локальная база знаний
+
+Кнопка со скрепкой в чате индексирует документы в `.sif-data/knowledge.json`. Данные не коммитятся в Git.
+
+Поддерживаются текстовые/кодовые файлы, PDF, DOCX и XLSX. Документ разбивается на фрагменты, а перед каждым ответом SIF локально ищет наиболее релевантные фрагменты и добавляет их в контекст выбранной модели.
+
+```env
+SIF_KNOWLEDGE_PORT=8788
+SIF_DATA_DIR=.sif-data
+SIF_MEMORY_TOP_K=6
+SIF_MAX_DOCUMENT_BYTES=15728640
+```
+
+Первый поиск в v0.3 лексический и полностью локальный. Следующий шаг — embeddings/vector search для семантической памяти.

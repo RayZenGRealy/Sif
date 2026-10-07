@@ -12,6 +12,7 @@ import { EMOTION_COLORS } from './constants';
 import * as SifLogic from './services/sifLogic';
 import { generateSIFResponse, generateSpeech, transcribeAudio, SifModelProviderId } from './services/aiService';
 import { AvailableProvider, getAvailableProviders } from './services/modelProviderService';
+import { KnowledgeStats, getKnowledgeStats, ingestKnowledgeFile } from './services/memoryService';
 import { LiveManager } from './services/liveManager';
 
 const UPDATE_RATE_MS = 1000;
@@ -34,9 +35,13 @@ const App: React.FC = () => {
   const [modelProvider, setModelProvider] = useState<SifModelProviderId>('gemini');
   const [availableProviders, setAvailableProviders] = useState<AvailableProvider[]>([]);
   const [selectedModelName, setSelectedModelName] = useState<string>('');
+  const [knowledgeStats, setKnowledgeStats] = useState<KnowledgeStats>({ documents: 0, chunks: 0, characters: 0 });
+  const [knowledgeStatus, setKnowledgeStatus] = useState<string>('');
+  const [isIndexing, setIsIndexing] = useState(false);
   
   const chatEndRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const liveManagerRef = useRef<LiveManager | null>(null);
 
   const dominantEmotion = SifLogic.getDominantEmotion(soul.currentEmotion);
@@ -69,6 +74,10 @@ const App: React.FC = () => {
       window.clearInterval(timer);
     };
   }, [modelProvider, selectedModelName]);
+
+  useEffect(() => {
+    getKnowledgeStats().then(setKnowledgeStats).catch(() => undefined);
+  }, []);
 
   // Logic: Energy & Mood Tick
   useEffect(() => {
@@ -136,6 +145,23 @@ const App: React.FC = () => {
         if (aiResponse.thought) setCurrentThought(aiResponse.thought);
     } catch (e) { console.error(e); } finally { setIsThinking(false); }
   }, [soul, dominantEmotion, modelProvider, selectedModelName]);
+
+  const handleKnowledgeFile = async (file?: File) => {
+    if (!file || isIndexing) return;
+    setIsIndexing(true);
+    setKnowledgeStatus('Индексирую ' + file.name + '...');
+    try {
+      const document = await ingestKnowledgeFile(file);
+      const stats = await getKnowledgeStats();
+      setKnowledgeStats(stats);
+      setKnowledgeStatus('Добавлено в память: ' + document.name + ' · ' + document.chunkCount + ' фрагм.');
+    } catch (error) {
+      setKnowledgeStatus(error instanceof Error ? error.message : 'Ошибка индексации файла');
+    } finally {
+      setIsIndexing(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
 
   const updateTrait = (trait: keyof PersonalityTraits, val: number) => {
     setSoul(prev => ({ ...prev, traits: { ...prev.traits, [trait]: val } }));
@@ -212,6 +238,12 @@ const App: React.FC = () => {
                             </div>
                         )}
                     </div>
+                    <div id="sif-knowledge" className="border-t border-slate-800 pt-3 space-y-1">
+                        <h3 className="text-[10px] font-bold text-slate-400 uppercase">База знаний</h3>
+                        <div className="text-[10px] text-slate-500">
+                            {knowledgeStats.documents} док. · {knowledgeStats.chunks} фрагм. · {Math.round(knowledgeStats.characters / 1000)}k символов
+                        </div>
+                    </div>
                     <div className="border-t border-slate-800 pt-3">
                         <h3 className="text-[10px] font-bold text-slate-400 uppercase">Черты Характера</h3>
                     </div>
@@ -275,6 +307,17 @@ const App: React.FC = () => {
 
             <div className="p-4 bg-black/20 border-t border-white/5">
                 <form onSubmit={(e) => { e.preventDefault(); handleInteraction(inputValue, selectedImage || undefined); setSelectedImage(null); }} className="flex gap-2 items-center">
+                    <input
+                        ref={fileInputRef}
+                        type="file"
+                        className="hidden"
+                        accept=".txt,.md,.json,.csv,.ts,.tsx,.js,.jsx,.py,.html,.css,.xml,.yaml,.yml,.log,.sql,.pdf,.docx,.xlsx"
+                        onChange={(e) => handleKnowledgeFile(e.target.files?.[0])}
+                    />
+                    <button type="button" disabled={isIndexing} onClick={() => fileInputRef.current?.click()}
+                            className="p-2 rounded-full text-slate-400 hover:text-sif-joy disabled:opacity-50" title="Добавить файл в память SIF">
+                        {isIndexing ? <Loader2 className="animate-spin" size={20} /> : <Paperclip size={20} />}
+                    </button>
                     <button type="button" onClick={() => setIsCameraActive(!isCameraActive)} className={`p-2 rounded-full ${isCameraActive ? 'text-red-400 bg-red-400/10' : 'text-slate-400'}`}>
                         {isCameraActive ? <CameraOff size={20} /> : <Camera size={20} />}
                     </button>
@@ -285,6 +328,7 @@ const App: React.FC = () => {
                         {isThinking ? <Loader2 className="animate-spin" size={20} /> : <Send size={20} />}
                     </button>
                 </form>
+                {knowledgeStatus && <div className="mt-2 text-[10px] text-slate-500 px-2">{knowledgeStatus}</div>}
             </div>
         </div>
       </div>
