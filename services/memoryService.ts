@@ -6,10 +6,21 @@ export interface KnowledgeDocument {
   createdAt: number;
   characters: number;
   chunkCount: number;
+  embeddedChunkCount?: number;
+  embeddingModel?: string;
+  metadata?: {
+    sourceType?: string;
+    mediaType?: 'audio' | 'video';
+    transcriptCharacters?: number;
+    visionFrames?: number;
+    frameIntervalSeconds?: number;
+  };
 }
 
 export interface KnowledgeStats {
   documents: number;
+  audioDocuments?: number;
+  videoDocuments?: number;
   chunks: number;
   embeddedChunks?: number;
   semanticCoverage?: number;
