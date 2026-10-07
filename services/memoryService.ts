@@ -11,6 +11,10 @@ export interface KnowledgeDocument {
 export interface KnowledgeStats {
   documents: number;
   chunks: number;
+  embeddedChunks?: number;
+  semanticCoverage?: number;
+  semanticEnabled?: boolean;
+  embeddingModel?: string | null;
   characters: number;
 }
 
@@ -21,6 +25,9 @@ export interface KnowledgeSearchResult {
   content: string;
   documentId: string;
   documentName: string;
+  lexicalScore?: number;
+  semanticScore?: number;
+  searchMode?: 'hybrid' | 'lexical';
 }
 
 function fileToBase64(file: File): Promise<string> {
@@ -79,4 +86,22 @@ export async function searchKnowledge(query: string, limit = 6): Promise<Knowled
   } catch {
     return [];
   }
+}
+
+export interface EmbeddingReindexResult {
+  enabled: boolean;
+  updated: number;
+  remaining: number;
+  model: string | null;
+}
+
+export async function reindexKnowledgeEmbeddings(limit = 64): Promise<EmbeddingReindexResult> {
+  const response = await fetch('/knowledge-api/embeddings/reindex', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ limit }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || ('Ошибка semantic reindex: ' + response.statusText));
+  return data;
 }

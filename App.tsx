@@ -12,7 +12,7 @@ import { EMOTION_COLORS } from './constants';
 import * as SifLogic from './services/sifLogic';
 import { generateSIFResponse, generateSpeech, transcribeAudio, SifModelProviderId } from './services/aiService';
 import { AvailableProvider, getAvailableProviders } from './services/modelProviderService';
-import { KnowledgeStats, getKnowledgeStats, ingestKnowledgeFile } from './services/memoryService';
+import { KnowledgeStats, getKnowledgeStats, ingestKnowledgeFile, reindexKnowledgeEmbeddings } from './services/memoryService';
 import { LiveManager } from './services/liveManager';
 
 const UPDATE_RATE_MS = 1000;
@@ -38,6 +38,7 @@ const App: React.FC = () => {
   const [knowledgeStats, setKnowledgeStats] = useState<KnowledgeStats>({ documents: 0, chunks: 0, characters: 0 });
   const [knowledgeStatus, setKnowledgeStatus] = useState<string>('');
   const [isIndexing, setIsIndexing] = useState(false);
+  const [isReindexingKnowledge, setIsReindexingKnowledge] = useState(false);
   
   const chatEndRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -163,6 +164,33 @@ const App: React.FC = () => {
     }
   };
 
+  const handleSemanticReindex = async () => {
+    if (isReindexingKnowledge) return;
+    setIsReindexingKnowledge(true);
+    setKnowledgeStatus('Доиндексирую семантическую память...');
+    try {
+      let totalUpdated = 0;
+      let remaining = 0;
+      for (let pass = 0; pass < 20; pass += 1) {
+        const result = await reindexKnowledgeEmbeddings(64);
+        totalUpdated += result.updated;
+        remaining = result.remaining;
+        if (!result.enabled || !remaining || !result.updated) break;
+      }
+      const stats = await getKnowledgeStats();
+      setKnowledgeStats(stats);
+      if (!stats.semanticEnabled) {
+        setKnowledgeStatus('Semantic memory выключена: настрой SIF_EMBEDDING_MODEL.');
+      } else {
+        setKnowledgeStatus('Semantic memory: ' + (stats.semanticCoverage || 0) + '% · обновлено ' + totalUpdated + ' фрагм.');
+      }
+    } catch (error) {
+      setKnowledgeStatus(error instanceof Error ? error.message : 'Ошибка semantic reindex');
+    } finally {
+      setIsReindexingKnowledge(false);
+    }
+  };
+
   const updateTrait = (trait: keyof PersonalityTraits, val: number) => {
     setSoul(prev => ({ ...prev, traits: { ...prev.traits, [trait]: val } }));
   };
@@ -238,11 +266,22 @@ const App: React.FC = () => {
                             </div>
                         )}
                     </div>
-                    <div id="sif-knowledge" className="border-t border-slate-800 pt-3 space-y-1">
+                    <div id="sif-knowledge" className="border-t border-slate-800 pt-3 space-y-2">
                         <h3 className="text-[10px] font-bold text-slate-400 uppercase">База знаний</h3>
                         <div className="text-[10px] text-slate-500">
                             {knowledgeStats.documents} док. · {knowledgeStats.chunks} фрагм. · {Math.round(knowledgeStats.characters / 1000)}k символов
                         </div>
+                        <div className="text-[10px] text-slate-500">
+                            Semantic: {knowledgeStats.semanticEnabled ? `${knowledgeStats.semanticCoverage || 0}% · ${knowledgeStats.embeddingModel || "model"}` : "выкл."}
+                        </div>
+                        <button
+                            type="button"
+                            disabled={isReindexingKnowledge || !knowledgeStats.semanticEnabled}
+                            onClick={handleSemanticReindex}
+                            className="w-full text-[10px] py-1.5 rounded bg-slate-800 border border-slate-700 text-slate-300 hover:text-white disabled:opacity-40"
+                        >
+                            {isReindexingKnowledge ? "ИНДЕКСИРУЮ..." : "ДОИНДЕКСИРОВАТЬ ПО СМЫСЛУ"}
+                        </button>
                     </div>
                     <div className="border-t border-slate-800 pt-3">
                         <h3 className="text-[10px] font-bold text-slate-400 uppercase">Черты Характера</h3>
