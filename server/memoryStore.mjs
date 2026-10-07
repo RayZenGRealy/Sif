@@ -197,10 +197,14 @@ export async function getKnowledgeStats() {
   };
 }
 
-export async function getEmbeddingCandidates(limit = 32) {
+export async function getEmbeddingCandidates(limit = 32, embeddingModel) {
   const db = await loadDb();
   return db.chunks
-    .filter(chunk => !Array.isArray(chunk.embedding) || !chunk.embedding.length)
+    .filter(chunk =>
+      !Array.isArray(chunk.embedding) ||
+      !chunk.embedding.length ||
+      (embeddingModel && chunk.embeddingModel !== embeddingModel)
+    )
     .slice(0, Math.max(1, limit))
     .map(chunk => ({ id: chunk.id, documentId: chunk.documentId, content: chunk.content }));
 }
@@ -260,7 +264,7 @@ export async function searchKnowledge(query, limit = 6, { queryEmbedding } = {})
         score,
         lexicalScore: lexical,
         semanticScore: semantic,
-        searchMode: semanticEnabled && Array.isArray(chunk.embedding) ? 'hybrid' : 'lexical',
+        searchMode: semanticEnabled && Array.isArray(chunk.embedding) && chunk.embedding.length ? 'hybrid' : 'lexical',
         chunkId: chunk.id,
         chunkIndex: chunk.index,
         content: chunk.content,
