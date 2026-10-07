@@ -28,6 +28,7 @@ const PORT = Number(process.env.SIF_GATEWAY_PORT || 8787);
 const HOST = process.env.SIF_GATEWAY_HOST || '127.0.0.1';
 const CORS_ORIGIN = process.env.SIF_CORS_ORIGIN || 'http://localhost:3000';
 const MAX_BODY_BYTES = Number(process.env.SIF_MAX_BODY_BYTES || 25 * 1024 * 1024);
+const OFFLINE_ONLY = /^(1|true|yes|on)$/i.test(process.env.SIF_OFFLINE_ONLY || '');
 
 const jsonHeaders = {
   'Content-Type': 'application/json; charset=utf-8',
@@ -99,7 +100,7 @@ async function resolveLocalModel(preferredModel) {
 }
 
 async function providerList() {
-  const geminiEnabled = Boolean(process.env.GEMINI_API_KEY);
+  const geminiEnabled = !OFFLINE_ONLY && Boolean(process.env.GEMINI_API_KEY);
   const localBaseUrl = process.env.SIF_LOCAL_BASE_URL || 'http://127.0.0.1:11434';
   const configuredLocalModel = process.env.SIF_LOCAL_MODEL || '';
   const discoveredModels = configuredLocalModel ? [configuredLocalModel] : await detectLocalModels();
@@ -140,6 +141,7 @@ function normalizeImagePart(imageBase64) {
 }
 
 async function runGemini(request) {
+  if (OFFLINE_ONLY) throw new Error('SIF работает в OFFLINE_ONLY режиме: облачные модели запрещены');
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('GEMINI_API_KEY is not configured on SIF Gateway');
   const ai = new GoogleGenAI({ apiKey });
@@ -188,6 +190,7 @@ async function transcribeAudio(base64, mimeType) {
     return data?.text || '';
   }
 
+  if (OFFLINE_ONLY) throw new Error('Не настроен локальный STT. В OFFLINE_ONLY режиме облачный fallback запрещён');
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('Не настроен локальный STT и отсутствует GEMINI_API_KEY');
   const ai = new GoogleGenAI({ apiKey });
@@ -231,6 +234,7 @@ async function generateSpeech(text) {
     return bytes.toString('base64');
   }
 
+  if (OFFLINE_ONLY) throw new Error('Не настроен локальный TTS. В OFFLINE_ONLY режиме облачный fallback запрещён');
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('Не настроен локальный TTS и отсутствует GEMINI_API_KEY');
   const ai = new GoogleGenAI({ apiKey });
@@ -296,7 +300,7 @@ const server = http.createServer(async (req, res) => {
 
     const url = new URL(req.url || '/', 'http://localhost');
     if (req.method === 'GET' && url.pathname === '/api/health') {
-      return send(res, 200, { ok: true, service: 'sif-gateway' });
+      return send(res, 200, { ok: true, service: 'sif-gateway', offlineOnly: OFFLINE_ONLY });
     }
 
     if (req.method === 'GET' && url.pathname === '/api/providers') {
