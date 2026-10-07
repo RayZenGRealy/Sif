@@ -1,20 +1,59 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# SIF
 
-# Run and deploy your AI Studio app
+SIF is evolving from a single-provider AI Studio app into a modular AI core with interchangeable cloud/local models, memory, tools, file analysis, training backends and robot integrations.
 
-This contains everything you need to run your app locally.
+## Local development
 
-View your app in AI Studio: https://ai.studio/apps/drive/1ZoQ3gOYwCziF005e9bSpyeC_-0er7mJu
-
-## Run Locally
-
-**Prerequisites:**  Node.js
-
+**Prerequisite:** Node.js 20+.
 
 1. Install dependencies:
    `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
+2. Copy `.env.example` to `.env.local`.
+3. Add `GEMINI_API_KEY` for Gemini through the backend gateway.
+4. Optional local model: set `SIF_LOCAL_MODEL` and `SIF_LOCAL_BASE_URL` for an OpenAI-compatible server such as Ollama, LM Studio or vLLM.
+5. Start SIF:
    `npm run dev`
+
+`npm run dev` starts both the SIF Gateway on port 8787 and Vite on port 3000. Vite proxies `/api/*` to the gateway.
+
+### Example local model configuration
+
+```env
+GEMINI_API_KEY=your_key
+SIF_LOCAL_BASE_URL=http://127.0.0.1:11434
+SIF_LOCAL_MODEL=your-local-model
+```
+
+In the SIF **ТЮНИНГ** panel, choose the active model. Providers that are not configured are shown as unavailable.
+
+## Architecture
+
+The new `core/` layer contains:
+
+- model gateway and provider contracts
+- backend gateway providers for cloud/local models
+- replaceable memory store
+- permission-aware tool registry
+- file/media routing
+- training backend contracts (SFT, LoRA, QLoRA, DPO, RL)
+- robot action contract with confirmation required by default
+
+See `core/README.md` for the roadmap.
+
+## Полностью автономный режим
+
+Чтобы запретить любые облачные обращения:
+
+```env
+SIF_OFFLINE_ONLY=true
+SIF_LOCAL_BASE_URL=http://127.0.0.1:11434
+SIF_LOCAL_MODEL=
+SIF_STT_BASE_URL=http://127.0.0.1:8000
+SIF_STT_MODEL=whisper
+SIF_TTS_BASE_URL=http://127.0.0.1:8880
+SIF_TTS_MODEL=kokoro
+```
+
+`SIF_LOCAL_MODEL` можно оставить пустым: gateway попробует найти модели автоматически через `/v1/models` или Ollama `/api/tags`.
+
+В `SIF_OFFLINE_ONLY=true` Gemini отключается даже при наличии ключа. Для голоса необходимо отдельно запустить локальные STT/TTS сервисы с OpenAI-compatible endpoints.

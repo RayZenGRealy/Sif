@@ -1,0 +1,57 @@
+export interface KnowledgeDocument {
+  id: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  createdAt: number;
+  characters: number;
+  chunkCount: number;
+}
+
+export interface KnowledgeStats {
+  documents: number;
+  chunks: number;
+  characters: number;
+}
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error || new Error('Не удалось прочитать файл'));
+    reader.onload = () => {
+      const value = String(reader.result || '');
+      resolve(value.includes(',') ? value.split(',')[1] : value);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+export async function ingestKnowledgeFile(file: File): Promise<KnowledgeDocument> {
+  const base64 = await fileToBase64(file);
+  const response = await fetch('/api/memory/ingest', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      name: file.name,
+      mimeType: file.type || 'application/octet-stream',
+      size: file.size,
+      base64,
+    }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || ('Ошибка индексации: ' + response.statusText));
+  return data.document;
+}
+
+export async function getKnowledgeStats(): Promise<KnowledgeStats> {
+  const response = await fetch('/api/memory/stats');
+  if (!response.ok) return { documents: 0, chunks: 0, characters: 0 };
+  return response.json();
+}
+
+export async function listKnowledgeDocuments(): Promise<KnowledgeDocument[]> {
+  const response = await fetch('/api/memory/documents');
+  if (!response.ok) return [];
+  const data = await response.json();
+  return Array.isArray(data.documents) ? data.documents : [];
+}
