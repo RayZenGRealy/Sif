@@ -1,4 +1,3 @@
-import { GoogleGenAI, Modality } from "@google/genai";
 import { EmotionalState, EmotionType, Source, Memory, PersonalityTraits } from "../types";
 import { EMOTION_DISPLAY_NAMES } from "../constants";
 import { createDefaultSifCore } from "../core/sifCore";
@@ -13,8 +12,8 @@ interface AIResponse {
   generatedImage?: string;
 }
 
-const getApiKey = () => process.env.API_KEY || "";
-const sifCore = createDefaultSifCore(getApiKey);
+export type SifModelProviderId = "gemini" | "local";
+const sifCore = createDefaultSifCore();
 
 export const generateSIFResponse = async (
   userText: string,
@@ -24,7 +23,8 @@ export const generateSIFResponse = async (
   desires: string[],
   learnedPolicies: string[],
   imageBase64?: string,
-  traits?: PersonalityTraits
+  traits?: PersonalityTraits,
+  providerId: SifModelProviderId = "gemini"
 ): Promise<AIResponse> => {
   const traitContext = traits
     ? "Твои текущие настройки личности:\n" +
@@ -49,13 +49,13 @@ export const generateSIFResponse = async (
     "<<Emotion:Delta>> [[Policy: \"Rule\"]] {{Thought}} Ответ пользователю.";
 
   try {
-    const model = userText.length > 100 ? 'gemini-3-pro-preview' : 'gemini-3-flash-preview';
-    const response = await sifCore.generate('gemini', {
+    const geminiModel = userText.length > 100 ? 'gemini-3-pro-preview' : 'gemini-3-flash-preview';
+    const response = await sifCore.generate(providerId, {
       userText,
       systemInstruction: systemContext,
       imageBase64,
-      preferredModel: model,
-      enableWebSearch: model === 'gemini-3-pro-preview',
+      preferredModel: providerId === 'gemini' ? geminiModel : undefined,
+      enableWebSearch: providerId === 'gemini' && geminiModel === 'gemini-3-pro-preview',
       metadata: { dominantEmotion, currentEmotions },
     });
 
@@ -64,18 +64,19 @@ export const generateSIFResponse = async (
       content: userText,
       createdAt: Date.now(),
       importance: 1,
-      tags: ['conversation', dominantEmotion],
+      tags: ['conversation', dominantEmotion, providerId],
       metadata: { provider: response.providerId, model: response.model },
     });
 
     return parseStandardResponse(response.text, response.sources || []);
   } catch (error) {
     console.error(error);
+    const message = error instanceof Error ? error.message : String(error);
     return {
-      text: "Ой, мои мысли запутались... Давай попробуем еще раз?",
+      text: "Не удалось связаться с моделью: " + message,
       sources: [],
       emotionShift: { Fear: 5 },
-      thought: "Сбой связи...",
+      thought: "Сбой связи с выбранной моделью...",
       newPolicy: null,
     };
   }
@@ -92,9 +93,7 @@ function parseStandardResponse(rawText: string = "", modelSources: ModelSource[]
     cleanText = cleanText.replace(emoMatch[0], '').trim();
     emoMatch[1].split(',').forEach(p => {
       const [e, v] = p.split(':').map(s => s.trim());
-      if (e && !isNaN(parseFloat(v))) {
-        emotionShift[e as keyof EmotionalState] = parseFloat(v);
-      }
+      if (e && !isNaN(parseFloat(v))) emotionShift[e as keyof EmotionalState] = parseFloat(v);
     });
   }
 
@@ -110,47 +109,28 @@ function parseStandardResponse(rawText: string = "", modelSources: ModelSource[]
     cleanText = cleanText.replace(thoughtMatch[0], '').trim();
   }
 
-  const sources: Source[] = modelSources.map(source => ({
-    title: source.title,
-    uri: source.uri,
-  }));
-
+  const sources: Source[] = modelSources.map(source => ({ title: source.title, uri: source.uri }));
   return { text: cleanText, sources, emotionShift, thought, newPolicy };
 }
 
 export const transcribeAudio = async (base64: string, mimeType: string) => {
-  const ai = new GoogleGenAI({ apiKey: getApiKey() });
-  const res = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
-    contents: {
-      parts: [
-        { inlineData: { mimeType, data: base64 } },
-        { text: "Transcribe exactly." },
-      ],
-    },
+  const response = await fetch('/api/transcribe', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ base64, mimeType }),
   });
-  return res.text;
+  if (!response.ok) throw new Error('Transcription failed: ' + response.statusText);
+  const data = await response.json();
+  return data.text as string;
 };
 
 export const generateSpeech = async (text: string) => {
-  const ai = new GoogleGenAI({ apiKey: getApiKey() });
-  const clean = text
-    .replace(/<<.*?>>/g, '')
-    .replace(/\[\[.*?\]\]/g, '')
-    .replace(/\{.*?\}/g, '');
-
-  const res = await ai.models.generateContent({
-    model: "gemini-2.5-flash-preview-tts",
-    contents: [{ parts: [{ text: clean }] }],
-    config: {
-      responseModalities: [Modality.AUDIO],
-      speechConfig: {
-        voiceConfig: {
-          prebuiltVoiceConfig: { voiceName: 'Kore' },
-        },
-      },
-    },
+  const response = await fetch('/api/speech', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text }),
   });
-
-  return res.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+  if (!response.ok) throw new Error('Speech generation failed: ' + response.statusText);
+  const data = await response.json();
+  return data.audioBase64 as string;
 };
