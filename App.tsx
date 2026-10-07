@@ -49,11 +49,16 @@ const App: React.FC = () => {
       if (cancelled) return;
       setAvailableProviders(providers);
       const current = providers.find(provider => provider.id === modelProvider);
-      if (current?.model && !selectedModelName) setSelectedModelName(current.model);
       if (!current || !current.enabled) {
         const firstEnabled = providers.find(provider => provider.enabled);
         if (firstEnabled && (firstEnabled.id === 'gemini' || firstEnabled.id === 'local')) {
           setModelProvider(firstEnabled.id);
+          setSelectedModelName(firstEnabled.models?.[0] || firstEnabled.model || '');
+        }
+      } else {
+        const allowedModels = current.models?.length ? current.models : (current.model ? [current.model] : []);
+        if (allowedModels.length && !allowedModels.includes(selectedModelName)) {
+          setSelectedModelName(allowedModels[0]);
         }
       }
     };
@@ -177,7 +182,7 @@ const App: React.FC = () => {
                         <h3 className="text-[10px] font-bold text-slate-400 uppercase">Модель</h3>
                         <select
                             value={modelProvider}
-                            onChange={(e) => setModelProvider(e.target.value as SifModelProviderId)}
+                            onChange={(e) => { setModelProvider(e.target.value as SifModelProviderId); setSelectedModelName(""); }}
                             className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-2 text-xs text-white outline-none focus:ring-1 focus:ring-sif-joy"
                         >
                             {availableProviders.map(provider => (
