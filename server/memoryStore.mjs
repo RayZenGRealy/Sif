@@ -124,6 +124,7 @@ export async function ingestKnowledgeDocument({
   text,
   embedder,
   embeddingModel,
+  metadata,
 }) {
   const normalized = normalizeText(text);
   if (!normalized) throw new Error('В документе не найден текст для индексации');
@@ -158,6 +159,7 @@ export async function ingestKnowledgeDocument({
     chunkCount: pieces.length,
     embeddedChunkCount,
     embeddingModel: embeddedChunkCount ? embeddingModel : undefined,
+    metadata: metadata && typeof metadata === 'object' ? metadata : undefined,
   };
 
   db.documents.unshift(document);
