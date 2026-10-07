@@ -1,37 +1,39 @@
 # SIF Core v0.1
 
-SIF Core separates the user interface from model providers, memory, tools, file analysis, training backends and robot actions.
+SIF Core separates UI, model providers, memory, tools, file analysis, training and robot actions.
 
-## Main pieces
+## Runtime flow
 
-- ModelGateway: one interface for Gemini, local models and OpenAI-compatible servers.
-- ToolRegistry: online, local and robot tools with confirmation support.
-- MemoryStore: replaceable long-term memory layer.
-- File analyzer: routes text, image, audio, video and binary files.
-- Training types: common contract for future SFT, LoRA/QLoRA, DPO and RL backends.
-- Robot tool contract: robot actions are confirmation-gated by default.
+`React UI -> SIF Core -> BackendGatewayProvider -> /api/chat -> cloud or local model`
 
-## Local models
+The backend gateway keeps ordinary chat credentials out of the browser and lets SIF switch providers without changing the UI.
 
-Use OpenAICompatibleProvider with servers such as Ollama, LM Studio or vLLM when they expose an OpenAI-compatible chat endpoint.
+## Providers
 
-Example:
+- `gemini`: Gemini through SIF Gateway.
+- `local`: any OpenAI-compatible local/server model configured with `SIF_LOCAL_BASE_URL` and `SIF_LOCAL_MODEL`.
+- `OpenAICompatibleProvider`: lower-level provider contract for future direct/server-side integrations.
 
-    core.registerModel(new OpenAICompatibleProvider({
-      id: 'local',
-      displayName: 'Local LLM',
-      baseUrl: 'http://localhost:11434',
-      defaultModel: 'your-model',
-      kind: 'local'
-    }));
+## Memory and tools
 
-The browser must be allowed to reach the server and the server must permit CORS. For production, put local/remote model access behind a SIF backend gateway instead of exposing secrets in the browser.
+`BrowserMemoryStore` is the first replaceable memory implementation. `ToolRegistry` supports local, online and robot tools; tools can require explicit confirmation.
+
+## File/media layer
+
+The current analyzer identifies text, images, audio, video and binary files and routes them toward capable providers. Rich document parsing and timed video ingestion are next milestones.
+
+## Training
+
+`TrainingBackend` defines a common contract for SFT, LoRA, QLoRA, DPO and RL jobs. v0.1 defines the interface only; a worker service will execute jobs later.
+
+## Robot layer
+
+`createRobotTool` marks robot actions as confirmation-required by default. The future ROS2 adapter should translate approved high-level actions into constrained robot commands and return sensor/state feedback.
 
 ## Next milestones
 
-1. Backend gateway for credentials, tools and local-network connectors.
-2. UI model/provider selector.
-3. Persistent vector memory and document ingestion.
-4. Video/audio ingestion pipeline.
-5. Training worker service with dataset/version tracking.
-6. ROS2 adapter with permissioned action execution.
+1. Persistent vector memory + document ingestion.
+2. PDF/DOCX/XLSX and timed audio/video ingestion.
+3. Tool execution service and connector permissions.
+4. Training worker with dataset/model versioning.
+5. ROS2 adapter and simulation tests.
