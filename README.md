@@ -87,3 +87,32 @@ SIF_EMBEDDING_BATCH_SIZE=16
 Если `SIF_EMBEDDING_BASE_URL` пустой, Knowledge Service использует `SIF_LOCAL_BASE_URL`. Новые документы получают embeddings при загрузке. Для старой базы нажми **ДОИНДЕКСИРОВАТЬ ПО СМЫСЛУ** в панели SIF.
 
 Embedding-векторы хранятся локально в `.sif-data/knowledge.json`; облако для semantic memory не требуется.
+
+## Audio / Video Memory
+
+В v0.5 кнопка со скрепкой принимает аудио и видео. Аудио отправляется в локальный STT, а видео разбирается через FFmpeg: из него извлекается звуковая дорожка и, если настроена vision-модель, периодические кадры.
+
+Результат превращается в обычный текстовый источник памяти: транскрипт речи + описания визуальных событий. После этого он автоматически проходит тот же chunking, embeddings и hybrid search, что PDF/DOCX/XLSX.
+
+Для аудио нужен локальный OpenAI-compatible STT:
+
+```env
+SIF_STT_BASE_URL=http://127.0.0.1:8000
+SIF_STT_MODEL=whisper
+SIF_STT_LANGUAGE=ru
+```
+
+Для видео установи FFmpeg и при желании подключи локальную vision-модель:
+
+```env
+SIF_FFMPEG_PATH=ffmpeg
+SIF_VIDEO_FRAME_INTERVAL_SECONDS=15
+SIF_VIDEO_MAX_FRAMES=12
+SIF_VISION_BASE_URL=http://127.0.0.1:11434
+SIF_VISION_MODEL=your-vision-model
+SIF_VISION_API_KEY=
+```
+
+Если vision-модель не настроена, видео всё равно может попасть в память по своей звуковой дорожке. Если в видео нет полезного аудио, для его понимания нужна vision-модель. Лимит браузерной загрузки v0.5 — 100 МБ.
+
+В `SIF_OFFLINE_ONLY=true` весь этот pipeline остаётся локальным: FFmpeg + локальный STT + локальная vision-модель + локальные embeddings.
