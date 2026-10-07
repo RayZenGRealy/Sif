@@ -39,3 +39,21 @@ The new `core/` layer contains:
 - robot action contract with confirmation required by default
 
 See `core/README.md` for the roadmap.
+
+## Полностью автономный режим
+
+Чтобы запретить любые облачные обращения:
+
+```env
+SIF_OFFLINE_ONLY=true
+SIF_LOCAL_BASE_URL=http://127.0.0.1:11434
+SIF_LOCAL_MODEL=
+SIF_STT_BASE_URL=http://127.0.0.1:8000
+SIF_STT_MODEL=whisper
+SIF_TTS_BASE_URL=http://127.0.0.1:8880
+SIF_TTS_MODEL=kokoro
+```
+
+`SIF_LOCAL_MODEL` можно оставить пустым: gateway попробует найти модели автоматически через `/v1/models` или Ollama `/api/tags`.
+
+В `SIF_OFFLINE_ONLY=true` Gemini отключается даже при наличии ключа. Для голоса необходимо отдельно запустить локальные STT/TTS сервисы с OpenAI-compatible endpoints.
