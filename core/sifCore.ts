@@ -1,6 +1,6 @@
 import { ModelGateway } from './modelGateway';
 import { ModelProvider, ModelRequest, ModelResponse } from './modelTypes';
-import { GeminiProvider } from './providers/geminiProvider';
+import { BackendGatewayProvider } from './providers/backendGatewayProvider';
 import { BrowserMemoryStore, MemoryStore } from './memory/memoryStore';
 import { ToolDefinition, ToolRegistry } from './tools/toolRegistry';
 import { analyzeFile, FileAnalysis } from './files/fileAnalyzer';
@@ -28,8 +28,17 @@ export class SifCore {
   }
 }
 
-export function createDefaultSifCore(getGeminiApiKey: () => string): SifCore {
+export function createDefaultSifCore(): SifCore {
   const core = new SifCore();
-  core.registerModel(new GeminiProvider(getGeminiApiKey));
+  core.registerModel(new BackendGatewayProvider({
+    id: 'gemini',
+    displayName: 'Gemini через SIF Gateway',
+    kind: 'cloud',
+  }));
+  core.registerModel(new BackendGatewayProvider({
+    id: 'local',
+    displayName: 'Локальная модель',
+    kind: 'local',
+  }));
   return core;
 }
