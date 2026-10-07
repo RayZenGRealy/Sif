@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { extname, join } from 'node:path';
 import { spawn } from 'node:child_process';
@@ -245,11 +245,7 @@ export async function extractMediaKnowledge({
     if (vision.baseUrl && vision.model) {
       try {
         const frameDir = join(workDir, 'frames');
-        await runCommand(process.execPath, [
-          '-e',
-          "require('fs').mkdirSync(process.argv[1],{recursive:true})",
-          frameDir,
-        ]);
+        await mkdir(frameDir, { recursive: true });
         const frames = await extractVideoFrames(
           inputPath,
           frameDir,
