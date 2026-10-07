@@ -48,8 +48,11 @@ const App: React.FC = () => {
       if (cancelled) return;
       setAvailableProviders(providers);
       const current = providers.find(provider => provider.id === modelProvider);
-      if ((!current || !current.enabled) && providers.some(provider => provider.id === 'gemini' && provider.enabled)) {
-        setModelProvider('gemini');
+      if (!current || !current.enabled) {
+        const firstEnabled = providers.find(provider => provider.enabled);
+        if (firstEnabled && (firstEnabled.id === 'gemini' || firstEnabled.id === 'local')) {
+          setModelProvider(firstEnabled.id);
+        }
       }
     };
     refreshProviders();
