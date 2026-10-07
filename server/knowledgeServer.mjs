@@ -2,6 +2,7 @@ import http from 'node:http';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { extractDocumentText, isSupportedDocument } from './documentParsers.mjs';
+import { extractMediaKnowledge, isSupportedMedia } from './mediaProcessor.mjs';
 import {
   getEmbeddingCandidates,
   getKnowledgeStats,
@@ -33,7 +34,14 @@ loadEnvFile('.env');
 
 const PORT = Number(process.env.SIF_KNOWLEDGE_PORT || 8788);
 const HOST = process.env.SIF_GATEWAY_HOST || '127.0.0.1';
-const MAX_BODY_BYTES = Number(process.env.SIF_MAX_BODY_BYTES || 25 * 1024 * 1024);
+const MAX_BODY_BYTES = Number(process.env.SIF_KNOWLEDGE_MAX_BODY_BYTES || 160 * 1024 * 1024);
+const MAX_MEDIA_BYTES = Number(process.env.SIF_MAX_MEDIA_BYTES || 100 * 1024 * 1024);
+const FFMPEG_PATH = process.env.SIF_FFMPEG_PATH || 'ffmpeg';
+const VIDEO_FRAME_INTERVAL_SECONDS = Math.max(1, Number(process.env.SIF_VIDEO_FRAME_INTERVAL_SECONDS || 15));
+const VIDEO_MAX_FRAMES = Math.max(1, Number(process.env.SIF_VIDEO_MAX_FRAMES || 12));
+const VISION_BASE_URL = String(process.env.SIF_VISION_BASE_URL || process.env.SIF_LOCAL_BASE_URL || '').replace(/\/+$/, '');
+const VISION_MODEL = process.env.SIF_VISION_MODEL || '';
+const VISION_API_KEY = process.env.SIF_VISION_API_KEY || process.env.SIF_LOCAL_API_KEY || '';
 const EMBEDDING_BASE_URL = String(
   process.env.SIF_EMBEDDING_BASE_URL || process.env.SIF_LOCAL_BASE_URL || ''
 ).replace(/\/+$/, '');
@@ -147,6 +155,11 @@ const server = http.createServer(async (req, res) => {
           enabled: embeddingEnabled(),
           model: embeddingEnabled() ? EMBEDDING_MODEL : null,
         },
+        mediaMemory: {
+          stt: Boolean(process.env.SIF_STT_BASE_URL && process.env.SIF_STT_MODEL),
+          vision: Boolean(VISION_BASE_URL && VISION_MODEL),
+          ffmpeg: FFMPEG_PATH,
+        },
       });
     }
 
@@ -195,29 +208,61 @@ const server = http.createServer(async (req, res) => {
       const body = await readJson(req);
       const name = String(body.name || 'document');
       const mimeType = String(body.mimeType || 'application/octet-stream');
-      if (!isSupportedDocument(name, mimeType)) {
-        return send(res, 415, { error: 'Этот тип документа пока не поддерживается: ' + name });
+      const media = isSupportedMedia(name, mimeType);
+
+      if (!media && !isSupportedDocument(name, mimeType)) {
+        return send(res, 415, { error: 'Этот тип файла пока не поддерживается: ' + name });
       }
 
-      const maxBytes = Number(process.env.SIF_MAX_DOCUMENT_BYTES || 15 * 1024 * 1024);
-      const text = await extractDocumentText({
-        name,
-        mimeType,
-        base64: body.base64 || '',
-        maxBytes,
-      });
+      let text;
+      let metadata = { sourceType: 'document' };
+
+      if (media) {
+        const result = await extractMediaKnowledge({
+          name,
+          mimeType,
+          base64: body.base64 || '',
+          maxBytes: MAX_MEDIA_BYTES,
+          ffmpegPath: FFMPEG_PATH,
+          stt: {
+            baseUrl: process.env.SIF_STT_BASE_URL || '',
+            model: process.env.SIF_STT_MODEL || '',
+            apiKey: process.env.SIF_STT_API_KEY || '',
+            language: process.env.SIF_STT_LANGUAGE || '',
+          },
+          vision: {
+            baseUrl: VISION_BASE_URL,
+            model: VISION_MODEL,
+            apiKey: VISION_API_KEY,
+          },
+          frameIntervalSeconds: VIDEO_FRAME_INTERVAL_SECONDS,
+          maxFrames: VIDEO_MAX_FRAMES,
+        });
+        text = result.text;
+        metadata = { sourceType: 'media', ...result.metadata };
+      } else {
+        const maxBytes = Number(process.env.SIF_MAX_DOCUMENT_BYTES || 15 * 1024 * 1024);
+        text = await extractDocumentText({
+          name,
+          mimeType,
+          base64: body.base64 || '',
+          maxBytes,
+        });
+      }
 
       const document = await ingestKnowledgeDocument({
         name,
         mimeType,
         size: Number(body.size || 0),
         text,
+        metadata,
         embedder: embeddingEnabled() ? embedTexts : undefined,
         embeddingModel: embeddingEnabled() ? EMBEDDING_MODEL : undefined,
       });
 
       return send(res, 200, {
         document,
+        media,
         semanticIndexed: Boolean(document.embeddedChunkCount),
         embeddingModel: document.embeddingModel || null,
       });
