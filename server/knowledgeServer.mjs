@@ -110,7 +110,7 @@ async function reindexMissingEmbeddings(limit = 64) {
     return { enabled: false, updated: 0, remaining: 0, model: null };
   }
 
-  const candidates = await getEmbeddingCandidates(limit);
+  const candidates = await getEmbeddingCandidates(limit, EMBEDDING_MODEL);
   if (!candidates.length) {
     const stats = await getKnowledgeStats();
     return {
