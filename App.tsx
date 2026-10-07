@@ -10,7 +10,8 @@ import { MemoryLog } from './components/MemoryLog';
 import { SifSoul, EmotionType, ChatMessage, PersonalityTraits } from './types';
 import { EMOTION_COLORS } from './constants';
 import * as SifLogic from './services/sifLogic';
-import { generateSIFResponse, generateSpeech, transcribeAudio } from './services/aiService';
+import { generateSIFResponse, generateSpeech, transcribeAudio, SifModelProviderId } from './services/aiService';
+import { AvailableProvider, getAvailableProviders } from './services/modelProviderService';
 import { LiveManager } from './services/liveManager';
 
 const UPDATE_RATE_MS = 1000;
@@ -30,6 +31,8 @@ const App: React.FC = () => {
   const [audioLevel, setAudioLevel] = useState(0); 
   const [isLiveMode, setIsLiveMode] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [modelProvider, setModelProvider] = useState<SifModelProviderId>('gemini');
+  const [availableProviders, setAvailableProviders] = useState<AvailableProvider[]>([]);
   
   const chatEndRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -37,6 +40,25 @@ const App: React.FC = () => {
 
   const dominantEmotion = SifLogic.getDominantEmotion(soul.currentEmotion);
   const dominantColor = EMOTION_COLORS[dominantEmotion];
+
+  useEffect(() => {
+    let cancelled = false;
+    const refreshProviders = async () => {
+      const providers = await getAvailableProviders();
+      if (cancelled) return;
+      setAvailableProviders(providers);
+      const current = providers.find(provider => provider.id === modelProvider);
+      if ((!current || !current.enabled) && providers.some(provider => provider.id === 'gemini' && provider.enabled)) {
+        setModelProvider('gemini');
+      }
+    };
+    refreshProviders();
+    const timer = window.setInterval(refreshProviders, 10000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [modelProvider]);
 
   // Logic: Energy & Mood Tick
   useEffect(() => {
@@ -78,7 +100,7 @@ const App: React.FC = () => {
 
     try {
         const aiResponse = await generateSIFResponse(
-            text, soul.currentEmotion, dominantEmotion, soul.memories, soul.desires, soul.learnedPolicies, image, soul.traits
+            text, soul.currentEmotion, dominantEmotion, soul.memories, soul.desires, soul.learnedPolicies, image, soul.traits, modelProvider
         );
 
         setSoul(prev => {
@@ -103,7 +125,7 @@ const App: React.FC = () => {
 
         if (aiResponse.thought) setCurrentThought(aiResponse.thought);
     } catch (e) { console.error(e); } finally { setIsThinking(false); }
-  }, [soul, dominantEmotion]);
+  }, [soul, dominantEmotion, modelProvider]);
 
   const updateTrait = (trait: keyof PersonalityTraits, val: number) => {
     setSoul(prev => ({ ...prev, traits: { ...prev.traits, [trait]: val } }));
@@ -146,7 +168,27 @@ const App: React.FC = () => {
                 <MemoryLog memories={soul.memories} policies={soul.learnedPolicies} />
             ) : (
                 <div className="space-y-4 p-2 overflow-y-auto">
-                    <h3 className="text-[10px] font-bold text-slate-400 uppercase">Черты Характера</h3>
+                    <div className="space-y-2">
+                        <h3 className="text-[10px] font-bold text-slate-400 uppercase">Модель</h3>
+                        <select
+                            value={modelProvider}
+                            onChange={(e) => setModelProvider(e.target.value as SifModelProviderId)}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-2 text-xs text-white outline-none focus:ring-1 focus:ring-sif-joy"
+                        >
+                            {availableProviders.map(provider => (
+                                <option key={provider.id} value={provider.id} disabled={!provider.enabled}>
+                                    {provider.displayName}{provider.model ? ` — ${provider.model}` : ""}{!provider.enabled ? " (недоступна)" : ""}
+                                </option>
+                            ))}
+                        </select>
+                        <div className="text-[10px] text-slate-500">
+                            {availableProviders.find(provider => provider.id === modelProvider)?.reason ||
+                              (modelProvider === "local" ? "Ответы идут через локальный OpenAI-compatible сервер." : "Ответы идут через SIF Gateway.")}
+                        </div>
+                    </div>
+                    <div className="border-t border-slate-800 pt-3">
+                        <h3 className="text-[10px] font-bold text-slate-400 uppercase">Черты Характера</h3>
+                    </div>
                     {Object.entries(soul.traits).map(([trait, value]) => (
                         <div key={trait} className="space-y-1">
                             <div className="flex justify-between text-[10px] text-slate-300">
