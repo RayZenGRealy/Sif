@@ -4,6 +4,8 @@ export interface AvailableProvider {
   kind: 'cloud' | 'local' | 'custom';
   enabled: boolean;
   model?: string;
+  models?: string[];
+  audio?: { stt: boolean; tts: boolean };
   reason?: string;
 }
 
