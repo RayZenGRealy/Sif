@@ -14,6 +14,15 @@ export interface KnowledgeStats {
   characters: number;
 }
 
+export interface KnowledgeSearchResult {
+  score: number;
+  chunkId: string;
+  chunkIndex: number;
+  content: string;
+  documentId: string;
+  documentName: string;
+}
+
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -28,7 +37,7 @@ function fileToBase64(file: File): Promise<string> {
 
 export async function ingestKnowledgeFile(file: File): Promise<KnowledgeDocument> {
   const base64 = await fileToBase64(file);
-  const response = await fetch('/api/memory/ingest', {
+  const response = await fetch('/knowledge-api/ingest', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -44,14 +53,30 @@ export async function ingestKnowledgeFile(file: File): Promise<KnowledgeDocument
 }
 
 export async function getKnowledgeStats(): Promise<KnowledgeStats> {
-  const response = await fetch('/api/memory/stats');
+  const response = await fetch('/knowledge-api/stats');
   if (!response.ok) return { documents: 0, chunks: 0, characters: 0 };
   return response.json();
 }
 
 export async function listKnowledgeDocuments(): Promise<KnowledgeDocument[]> {
-  const response = await fetch('/api/memory/documents');
+  const response = await fetch('/knowledge-api/documents');
   if (!response.ok) return [];
   const data = await response.json();
   return Array.isArray(data.documents) ? data.documents : [];
+}
+
+export async function searchKnowledge(query: string, limit = 6): Promise<KnowledgeSearchResult[]> {
+  if (!query.trim()) return [];
+  try {
+    const response = await fetch('/knowledge-api/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query, limit }),
+    });
+    if (!response.ok) return [];
+    const data = await response.json();
+    return Array.isArray(data.results) ? data.results : [];
+  } catch {
+    return [];
+  }
 }

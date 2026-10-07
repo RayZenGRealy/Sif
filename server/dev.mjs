@@ -2,10 +2,12 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const gatewayPath = fileURLToPath(new URL('./index.mjs', import.meta.url));
+const knowledgePath = fileURLToPath(new URL('./knowledgeServer.mjs', import.meta.url));
 const vitePath = fileURLToPath(new URL('../node_modules/vite/bin/vite.js', import.meta.url));
 
 const children = [
   spawn(process.execPath, [gatewayPath], { stdio: 'inherit', env: process.env }),
+  spawn(process.execPath, [knowledgePath], { stdio: 'inherit', env: process.env }),
   spawn(process.execPath, [vitePath], { stdio: 'inherit', env: process.env }),
 ];
 
