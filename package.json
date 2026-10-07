@@ -10,7 +10,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "check": "npm run typecheck && npm run build"
+    "check": "npm run typecheck && npm run server:check && npm run build",
+    "server:check": "node --check server/index.mjs && node --check server/knowledgeServer.mjs && node --check server/mediaProcessor.mjs && node --check server/memoryStore.mjs && node --check server/documentParsers.mjs && node --check server/dev.mjs"
   },
   "dependencies": {
     "recharts": "^3.6.0",
