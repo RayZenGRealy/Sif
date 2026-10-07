@@ -24,7 +24,8 @@ export const generateSIFResponse = async (
   learnedPolicies: string[],
   imageBase64?: string,
   traits?: PersonalityTraits,
-  providerId: SifModelProviderId = "gemini"
+  providerId: SifModelProviderId = "gemini",
+  preferredModel?: string
 ): Promise<AIResponse> => {
   const traitContext = traits
     ? "Твои текущие настройки личности:\n" +
@@ -54,7 +55,7 @@ export const generateSIFResponse = async (
       userText,
       systemInstruction: systemContext,
       imageBase64,
-      preferredModel: providerId === 'gemini' ? geminiModel : undefined,
+      preferredModel: preferredModel || (providerId === 'gemini' ? geminiModel : undefined),
       enableWebSearch: providerId === 'gemini' && geminiModel === 'gemini-3-pro-preview',
       metadata: { dominantEmotion, currentEmotions },
     });
