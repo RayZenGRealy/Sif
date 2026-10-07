@@ -269,7 +269,10 @@ const App: React.FC = () => {
                     <div id="sif-knowledge" className="border-t border-slate-800 pt-3 space-y-2">
                         <h3 className="text-[10px] font-bold text-slate-400 uppercase">База знаний</h3>
                         <div className="text-[10px] text-slate-500">
-                            {knowledgeStats.documents} док. · {knowledgeStats.chunks} фрагм. · {Math.round(knowledgeStats.characters / 1000)}k символов
+                            {knowledgeStats.documents} источн. · {knowledgeStats.chunks} фрагм. · {Math.round(knowledgeStats.characters / 1000)}k символов
+                        </div>
+                        <div className="text-[10px] text-slate-500">
+                            Медиа: 🎧 {knowledgeStats.audioDocuments || 0} · 🎬 {knowledgeStats.videoDocuments || 0}
                         </div>
                         <div className="text-[10px] text-slate-500">
                             Semantic: {knowledgeStats.semanticEnabled ? `${knowledgeStats.semanticCoverage || 0}% · ${knowledgeStats.embeddingModel || "model"}` : "выкл."}
@@ -350,7 +353,7 @@ const App: React.FC = () => {
                         ref={fileInputRef}
                         type="file"
                         className="hidden"
-                        accept=".txt,.md,.json,.csv,.ts,.tsx,.js,.jsx,.py,.html,.css,.xml,.yaml,.yml,.log,.sql,.pdf,.docx,.xlsx"
+                        accept=".txt,.md,.json,.csv,.ts,.tsx,.js,.jsx,.py,.html,.css,.xml,.yaml,.yml,.log,.sql,.pdf,.docx,.xlsx,.mp3,.wav,.m4a,.aac,.ogg,.opus,.flac,.webm,.mp4,.mov,.mkv,.avi,.m4v,audio/*,video/*"
                         onChange={(e) => handleKnowledgeFile(e.target.files?.[0])}
                     />
                     <button type="button" disabled={isIndexing} onClick={() => fileInputRef.current?.click()}

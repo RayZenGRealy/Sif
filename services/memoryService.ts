@@ -6,10 +6,21 @@ export interface KnowledgeDocument {
   createdAt: number;
   characters: number;
   chunkCount: number;
+  embeddedChunkCount?: number;
+  embeddingModel?: string;
+  metadata?: {
+    sourceType?: string;
+    mediaType?: 'audio' | 'video';
+    transcriptCharacters?: number;
+    visionFrames?: number;
+    frameIntervalSeconds?: number;
+  };
 }
 
 export interface KnowledgeStats {
   documents: number;
+  audioDocuments?: number;
+  videoDocuments?: number;
   chunks: number;
   embeddedChunks?: number;
   semanticCoverage?: number;
@@ -30,6 +41,8 @@ export interface KnowledgeSearchResult {
   searchMode?: 'hybrid' | 'lexical';
 }
 
+const MAX_BROWSER_UPLOAD_BYTES = 100 * 1024 * 1024;
+
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -43,6 +56,9 @@ function fileToBase64(file: File): Promise<string> {
 }
 
 export async function ingestKnowledgeFile(file: File): Promise<KnowledgeDocument> {
+  if (file.size > MAX_BROWSER_UPLOAD_BYTES) {
+    throw new Error('Файл больше 100 МБ. Для v0.5 уменьши файл или подними лимит и используй серверную загрузку.');
+  }
   const base64 = await fileToBase64(file);
   const response = await fetch('/knowledge-api/ingest', {
     method: 'POST',

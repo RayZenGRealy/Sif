@@ -124,6 +124,7 @@ export async function ingestKnowledgeDocument({
   text,
   embedder,
   embeddingModel,
+  metadata,
 }) {
   const normalized = normalizeText(text);
   if (!normalized) throw new Error('В документе не найден текст для индексации');
@@ -158,6 +159,7 @@ export async function ingestKnowledgeDocument({
     chunkCount: pieces.length,
     embeddedChunkCount,
     embeddingModel: embeddedChunkCount ? embeddingModel : undefined,
+    metadata: metadata && typeof metadata === 'object' ? metadata : undefined,
   };
 
   db.documents.unshift(document);
@@ -187,8 +189,12 @@ export async function listKnowledgeDocuments(limit = 100) {
 export async function getKnowledgeStats() {
   const db = await loadDb();
   const embeddedChunks = db.chunks.filter(chunk => Array.isArray(chunk.embedding) && chunk.embedding.length).length;
+  const audioDocuments = db.documents.filter(doc => doc.metadata?.mediaType === 'audio').length;
+  const videoDocuments = db.documents.filter(doc => doc.metadata?.mediaType === 'video').length;
   return {
     documents: db.documents.length,
+    audioDocuments,
+    videoDocuments,
     chunks: db.chunks.length,
     embeddedChunks,
     semanticCoverage: db.chunks.length ? Math.round((embeddedChunks / db.chunks.length) * 100) : 0,
