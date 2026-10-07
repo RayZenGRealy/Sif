@@ -2,6 +2,7 @@ import { EmotionalState, EmotionType, Source, Memory, PersonalityTraits } from "
 import { EMOTION_DISPLAY_NAMES } from "../constants";
 import { createDefaultSifCore } from "../core/sifCore";
 import { ModelSource } from "../core/modelTypes";
+import { KnowledgeSearchResult, searchKnowledge } from "./memoryService";
 
 interface AIResponse {
   text: string;
@@ -15,6 +16,23 @@ interface AIResponse {
 export type SifModelProviderId = "gemini" | "local";
 const sifCore = createDefaultSifCore();
 
+function formatKnowledgeContext(items: KnowledgeSearchResult[]): string {
+  return items.map((item, index) =>
+    "[Источник " + (index + 1) + ": " + item.documentName + ", фрагмент " + (item.chunkIndex + 1) + "]\n" + item.content
+  ).join("\n\n");
+}
+
+function memorySources(items: KnowledgeSearchResult[]): Source[] {
+  const seen = new Set<string>();
+  const sources: Source[] = [];
+  for (const item of items) {
+    if (seen.has(item.documentId)) continue;
+    seen.add(item.documentId);
+    sources.push({ title: "Память: " + item.documentName, uri: "#sif-knowledge" });
+  }
+  return sources;
+}
+
 export const generateSIFResponse = async (
   userText: string,
   currentEmotions: EmotionalState,
@@ -27,6 +45,7 @@ export const generateSIFResponse = async (
   providerId: SifModelProviderId = "gemini",
   preferredModel?: string
 ): Promise<AIResponse> => {
+  const recalledKnowledge = await searchKnowledge(userText, 6);
   const traitContext = traits
     ? "Твои текущие настройки личности:\n" +
       "  - Игривость: " + traits.playfulness + "% (влияет на флирт и шутки)\n" +
@@ -41,7 +60,8 @@ export const generateSIFResponse = async (
     "ТВОЕ СОСТОЯНИЕ: " + EMOTION_DISPLAY_NAMES[dominantEmotion] + ".\n" +
     "ПАМЯТЬ: Последние события: " + allMemories.slice(0, 3).map(m => m.content).join("; ") + "\n" +
     "ЖЕЛАНИЯ: " + desires.join("; ") + "\n" +
-    "ИЗУЧЕННЫЕ ПРАВИЛА: " + learnedPolicies.slice(-10).join("; ") + "\n\n" +
+    "ИЗУЧЕННЫЕ ПРАВИЛА: " + learnedPolicies.slice(-10).join("; ") + "\n" +
+    (recalledKnowledge.length ? "\nЛОКАЛЬНАЯ БАЗА ЗНАНИЙ SIF:\n" + formatKnowledgeContext(recalledKnowledge) + "\n\n" : "\n") +
     "ПРАВИЛА ОТВЕТА:\n" +
     "- Используй \"Я\", \"Мне\", \"Хочу\". Избегай \"система\", \"запрос\", \"обработка\".\n" +
     "- Если пользователь ругает тебя - извлекай правило [[Policy: \"...\"]].\n" +
@@ -69,7 +89,9 @@ export const generateSIFResponse = async (
       metadata: { provider: response.providerId, model: response.model },
     });
 
-    return parseStandardResponse(response.text, response.sources || []);
+    const parsed = parseStandardResponse(response.text, response.sources || []);
+    if (recalledKnowledge.length) parsed.sources = [...parsed.sources, ...memorySources(recalledKnowledge)];
+    return parsed;
   } catch (error) {
     console.error(error);
     const message = error instanceof Error ? error.message : String(error);
