@@ -53,10 +53,59 @@ async function readJson(req) {
   return JSON.parse(Buffer.concat(chunks).toString('utf8'));
 }
 
-function providerList() {
+let localModelCache = { at: 0, models: [] };
+
+async function detectLocalModels() {
+  const now = Date.now();
+  if (now - localModelCache.at < 10000) return localModelCache.models;
+
+  const baseUrl = (process.env.SIF_LOCAL_BASE_URL || 'http://127.0.0.1:11434').replace(/\/+$/, '');
+  const headers = {};
+  if (process.env.SIF_LOCAL_API_KEY) headers.Authorization = 'Bearer ' + process.env.SIF_LOCAL_API_KEY;
+
+  const discovered = [];
+  try {
+    const response = await fetch(baseUrl + '/v1/models', { headers });
+    if (response.ok) {
+      const data = await response.json();
+      for (const item of data?.data || []) {
+        if (item?.id) discovered.push(String(item.id));
+      }
+    }
+  } catch {}
+
+  if (!discovered.length) {
+    try {
+      const response = await fetch(baseUrl + '/api/tags', { headers });
+      if (response.ok) {
+        const data = await response.json();
+        for (const item of data?.models || []) {
+          if (item?.name) discovered.push(String(item.name));
+          else if (item?.model) discovered.push(String(item.model));
+        }
+      }
+    } catch {}
+  }
+
+  localModelCache = { at: now, models: [...new Set(discovered)] };
+  return localModelCache.models;
+}
+
+async function resolveLocalModel(preferredModel) {
+  if (preferredModel) return preferredModel;
+  if (process.env.SIF_LOCAL_MODEL) return process.env.SIF_LOCAL_MODEL;
+  const models = await detectLocalModels();
+  return models[0] || '';
+}
+
+async function providerList() {
   const geminiEnabled = Boolean(process.env.GEMINI_API_KEY);
   const localBaseUrl = process.env.SIF_LOCAL_BASE_URL || 'http://127.0.0.1:11434';
-  const localModel = process.env.SIF_LOCAL_MODEL || '';
+  const configuredLocalModel = process.env.SIF_LOCAL_MODEL || '';
+  const discoveredModels = configuredLocalModel ? [configuredLocalModel] : await detectLocalModels();
+  const localModel = configuredLocalModel || discoveredModels[0] || '';
+  const localSttEnabled = Boolean(process.env.SIF_STT_BASE_URL && process.env.SIF_STT_MODEL);
+  const localTtsEnabled = Boolean(process.env.SIF_TTS_BASE_URL && process.env.SIF_TTS_MODEL);
   return [
     {
       id: 'gemini',
@@ -65,6 +114,7 @@ function providerList() {
       enabled: geminiEnabled,
       model: process.env.SIF_GEMINI_MODEL || 'gemini-3-flash-preview',
       reason: geminiEnabled ? undefined : 'GEMINI_API_KEY не задан',
+      audio: { stt: geminiEnabled, tts: geminiEnabled },
     },
     {
       id: 'local',
@@ -72,8 +122,10 @@ function providerList() {
       kind: 'local',
       enabled: Boolean(localModel),
       model: localModel || undefined,
+      models: discoveredModels,
       baseUrl: localBaseUrl,
-      reason: localModel ? undefined : 'SIF_LOCAL_MODEL не задан',
+      reason: localModel ? undefined : 'Локальный сервер не найден или моделей нет',
+      audio: { stt: localSttEnabled, tts: localTtsEnabled },
     },
   ];
 }
@@ -118,8 +170,26 @@ async function runGemini(request) {
 }
 
 async function transcribeAudio(base64, mimeType) {
+  if (process.env.SIF_STT_BASE_URL && process.env.SIF_STT_MODEL) {
+    const baseUrl = process.env.SIF_STT_BASE_URL.replace(/\/+$/, '');
+    const bytes = Buffer.from(base64, 'base64');
+    const form = new FormData();
+    form.append('file', new Blob([bytes], { type: mimeType || 'audio/webm' }), 'audio.webm');
+    form.append('model', process.env.SIF_STT_MODEL);
+    if (process.env.SIF_STT_LANGUAGE) form.append('language', process.env.SIF_STT_LANGUAGE);
+    const headers = {};
+    if (process.env.SIF_STT_API_KEY) headers.Authorization = 'Bearer ' + process.env.SIF_STT_API_KEY;
+    const response = await fetch(baseUrl + '/v1/audio/transcriptions', { method: 'POST', headers, body: form });
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '');
+      throw new Error('Local STT error ' + response.status + ': ' + detail.slice(0, 500));
+    }
+    const data = await response.json();
+    return data?.text || '';
+  }
+
   const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error('GEMINI_API_KEY is not configured on SIF Gateway');
+  if (!apiKey) throw new Error('Не настроен локальный STT и отсутствует GEMINI_API_KEY');
   const ai = new GoogleGenAI({ apiKey });
   const response = await ai.models.generateContent({
     model: process.env.SIF_TRANSCRIBE_MODEL || 'gemini-3-flash-preview',
@@ -134,20 +204,43 @@ async function transcribeAudio(base64, mimeType) {
 }
 
 async function generateSpeech(text) {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error('GEMINI_API_KEY is not configured on SIF Gateway');
-  const ai = new GoogleGenAI({ apiKey });
   const clean = String(text || '')
     .replace(/<<.*?>>/g, '')
     .replace(/\[\[.*?\]\]/g, '')
     .replace(/\{.*?\}/g, '');
+
+  if (process.env.SIF_TTS_BASE_URL && process.env.SIF_TTS_MODEL) {
+    const baseUrl = process.env.SIF_TTS_BASE_URL.replace(/\/+$/, '');
+    const headers = { 'Content-Type': 'application/json' };
+    if (process.env.SIF_TTS_API_KEY) headers.Authorization = 'Bearer ' + process.env.SIF_TTS_API_KEY;
+    const response = await fetch(baseUrl + '/v1/audio/speech', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model: process.env.SIF_TTS_MODEL,
+        voice: process.env.SIF_TTS_VOICE || 'default',
+        input: clean,
+        response_format: process.env.SIF_TTS_FORMAT || 'wav',
+      }),
+    });
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '');
+      throw new Error('Local TTS error ' + response.status + ': ' + detail.slice(0, 500));
+    }
+    const bytes = Buffer.from(await response.arrayBuffer());
+    return bytes.toString('base64');
+  }
+
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error('Не настроен локальный TTS и отсутствует GEMINI_API_KEY');
+  const ai = new GoogleGenAI({ apiKey });
   const response = await ai.models.generateContent({
-    model: process.env.SIF_TTS_MODEL || 'gemini-2.5-flash-preview-tts',
+    model: process.env.SIF_TTS_MODEL_GEMINI || 'gemini-2.5-flash-preview-tts',
     contents: [{ parts: [{ text: clean }] }],
     config: {
       responseModalities: ['AUDIO'],
       speechConfig: {
-        voiceConfig: { prebuiltVoiceConfig: { voiceName: process.env.SIF_TTS_VOICE || 'Kore' } },
+        voiceConfig: { prebuiltVoiceConfig: { voiceName: process.env.SIF_TTS_VOICE_GEMINI || 'Kore' } },
       },
     },
   });
@@ -156,8 +249,8 @@ async function generateSpeech(text) {
 
 async function runLocal(request) {
   const baseUrl = (process.env.SIF_LOCAL_BASE_URL || 'http://127.0.0.1:11434').replace(/\/+$/, '');
-  const model = request.preferredModel || process.env.SIF_LOCAL_MODEL;
-  if (!model) throw new Error('SIF_LOCAL_MODEL is not configured on SIF Gateway');
+  const model = await resolveLocalModel(request.preferredModel);
+  if (!model) throw new Error('Локальная модель не найдена. Запусти Ollama/LM Studio или задай SIF_LOCAL_MODEL');
 
   const headers = { 'Content-Type': 'application/json' };
   if (process.env.SIF_LOCAL_API_KEY) {
@@ -207,7 +300,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'GET' && url.pathname === '/api/providers') {
-      return send(res, 200, { providers: providerList() });
+      return send(res, 200, { providers: await providerList() });
     }
 
     if (req.method === 'POST' && url.pathname === '/api/transcribe') {
