@@ -71,4 +71,19 @@ SIF_MEMORY_TOP_K=6
 SIF_MAX_DOCUMENT_BYTES=15728640
 ```
 
-Первый поиск в v0.3 лексический и полностью локальный. Следующий шаг — embeddings/vector search для семантической памяти.
+В v0.4 SIF поддерживает hybrid search: обычный лексический поиск + cosine similarity по локальным embedding-векторам. Если embedding-сервис не настроен или временно недоступен, память автоматически возвращается к лексическому поиску.
+
+### Semantic memory
+
+Подключи любой локальный OpenAI-compatible embedding endpoint (`/v1/embeddings`):
+
+```env
+SIF_EMBEDDING_BASE_URL=http://127.0.0.1:11434
+SIF_EMBEDDING_MODEL=your-embedding-model
+SIF_EMBEDDING_API_KEY=
+SIF_EMBEDDING_BATCH_SIZE=16
+```
+
+Если `SIF_EMBEDDING_BASE_URL` пустой, Knowledge Service использует `SIF_LOCAL_BASE_URL`. Новые документы получают embeddings при загрузке. Для старой базы нажми **ДОИНДЕКСИРОВАТЬ ПО СМЫСЛУ** в панели SIF.
+
+Embedding-векторы хранятся локально в `.sif-data/knowledge.json`; облако для semantic memory не требуется.
