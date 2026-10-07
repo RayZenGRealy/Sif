@@ -94,6 +94,43 @@ async function runGemini(request) {
   };
 }
 
+async function transcribeAudio(base64, mimeType) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error('GEMINI_API_KEY is not configured on SIF Gateway');
+  const ai = new GoogleGenAI({ apiKey });
+  const response = await ai.models.generateContent({
+    model: process.env.SIF_TRANSCRIBE_MODEL || 'gemini-3-flash-preview',
+    contents: {
+      parts: [
+        { inlineData: { mimeType, data: base64 } },
+        { text: 'Transcribe exactly.' },
+      ],
+    },
+  });
+  return response.text || '';
+}
+
+async function generateSpeech(text) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error('GEMINI_API_KEY is not configured on SIF Gateway');
+  const ai = new GoogleGenAI({ apiKey });
+  const clean = String(text || '')
+    .replace(/<<.*?>>/g, '')
+    .replace(/\[\[.*?\]\]/g, '')
+    .replace(/\{.*?\}/g, '');
+  const response = await ai.models.generateContent({
+    model: process.env.SIF_TTS_MODEL || 'gemini-2.5-flash-preview-tts',
+    contents: [{ parts: [{ text: clean }] }],
+    config: {
+      responseModalities: ['AUDIO'],
+      speechConfig: {
+        voiceConfig: { prebuiltVoiceConfig: { voiceName: process.env.SIF_TTS_VOICE || 'Kore' } },
+      },
+    },
+  });
+  return response?.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data || '';
+}
+
 async function runLocal(request) {
   const baseUrl = (process.env.SIF_LOCAL_BASE_URL || 'http://127.0.0.1:11434').replace(/\/+$/, '');
   const model = request.preferredModel || process.env.SIF_LOCAL_MODEL;
@@ -148,6 +185,18 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'GET' && url.pathname === '/api/providers') {
       return send(res, 200, { providers: providerList() });
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/transcribe') {
+      const body = await readJson(req);
+      const text = await transcribeAudio(body.base64 || '', body.mimeType || 'audio/webm');
+      return send(res, 200, { text });
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/speech') {
+      const body = await readJson(req);
+      const audioBase64 = await generateSpeech(body.text || '');
+      return send(res, 200, { audioBase64 });
     }
 
     if (req.method === 'POST' && url.pathname === '/api/chat') {
