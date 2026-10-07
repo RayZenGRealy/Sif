@@ -33,6 +33,7 @@ const App: React.FC = () => {
   const [showSettings, setShowSettings] = useState(false);
   const [modelProvider, setModelProvider] = useState<SifModelProviderId>('gemini');
   const [availableProviders, setAvailableProviders] = useState<AvailableProvider[]>([]);
+  const [selectedModelName, setSelectedModelName] = useState<string>('');
   
   const chatEndRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -48,6 +49,7 @@ const App: React.FC = () => {
       if (cancelled) return;
       setAvailableProviders(providers);
       const current = providers.find(provider => provider.id === modelProvider);
+      if (current?.model && !selectedModelName) setSelectedModelName(current.model);
       if (!current || !current.enabled) {
         const firstEnabled = providers.find(provider => provider.enabled);
         if (firstEnabled && (firstEnabled.id === 'gemini' || firstEnabled.id === 'local')) {
@@ -61,7 +63,7 @@ const App: React.FC = () => {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [modelProvider]);
+  }, [modelProvider, selectedModelName]);
 
   // Logic: Energy & Mood Tick
   useEffect(() => {
@@ -103,7 +105,7 @@ const App: React.FC = () => {
 
     try {
         const aiResponse = await generateSIFResponse(
-            text, soul.currentEmotion, dominantEmotion, soul.memories, soul.desires, soul.learnedPolicies, image, soul.traits, modelProvider
+            text, soul.currentEmotion, dominantEmotion, soul.memories, soul.desires, soul.learnedPolicies, image, soul.traits, modelProvider, selectedModelName || undefined
         );
 
         setSoul(prev => {
@@ -128,7 +130,7 @@ const App: React.FC = () => {
 
         if (aiResponse.thought) setCurrentThought(aiResponse.thought);
     } catch (e) { console.error(e); } finally { setIsThinking(false); }
-  }, [soul, dominantEmotion, modelProvider]);
+  }, [soul, dominantEmotion, modelProvider, selectedModelName]);
 
   const updateTrait = (trait: keyof PersonalityTraits, val: number) => {
     setSoul(prev => ({ ...prev, traits: { ...prev.traits, [trait]: val } }));
@@ -184,10 +186,26 @@ const App: React.FC = () => {
                                 </option>
                             ))}
                         </select>
+                        {modelProvider === "local" && (availableProviders.find(provider => provider.id === "local")?.models?.length || 0) > 1 && (
+                            <select
+                                value={selectedModelName}
+                                onChange={(e) => setSelectedModelName(e.target.value)}
+                                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-2 text-xs text-white outline-none focus:ring-1 focus:ring-sif-joy"
+                            >
+                                {availableProviders.find(provider => provider.id === "local")?.models?.map(model => (
+                                    <option key={model} value={model}>{model}</option>
+                                ))}
+                            </select>
+                        )}
                         <div className="text-[10px] text-slate-500">
                             {availableProviders.find(provider => provider.id === modelProvider)?.reason ||
                               (modelProvider === "local" ? "Ответы идут через локальный OpenAI-compatible сервер." : "Ответы идут через SIF Gateway.")}
                         </div>
+                        {modelProvider === "local" && (
+                            <div className="text-[10px] text-slate-500">
+                                Голос: STT {availableProviders.find(provider => provider.id === "local")?.audio?.stt ? "✓" : "—"} · TTS {availableProviders.find(provider => provider.id === "local")?.audio?.tts ? "✓" : "—"}
+                            </div>
+                        )}
                     </div>
                     <div className="border-t border-slate-800 pt-3">
                         <h3 className="text-[10px] font-bold text-slate-400 uppercase">Черты Характера</h3>
